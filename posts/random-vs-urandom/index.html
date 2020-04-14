@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>/dev/random vs /dev/urandom</title>
+    
+    <meta name="description" content="">
+    <meta name="image" content="">
+    
+    <meta itemprop="name" content="/dev/random vs /dev/urandom">
+    <meta itemprop="description" content="">
+    <meta itemprop="image" content="">
+    
+    <meta name="og:title" content="/dev/random vs /dev/urandom">
+    <meta name="og:description" content="">
+    
+    <meta name="og:url" content="https://f.gospodinov.ch/posts/random-vs-urandom/">
+    <meta name="og:site_name" content="/dev/random vs /dev/urandom">
+    <meta name="og:type" content="article">
+    
+    <meta name="article:tag" content="">
+    
+    
+    <link rel="stylesheet" href="https://f.gospodinov.ch/css/style.min.de09aea312afe57572ffb0919b70a916283dc697099f5048ef7a6d84f333ff26.css" integrity="sha256-3gmuoxKv5XVy/7CRm3CpFig9xpcJn1BI73pthPMz/yY=">
+    
+    <script src="https://f.gospodinov.ch/js/anchorforid.min.03f1a81fc3eb058b70448cc094660cf1c0373743f3816b82b265397192f411fc.js" integrity="sha256-A/GoH8PrBYtwRIzAlGYM8cA3N0PzgWuCsmU5cZL0Efw="></script>
+  </head>
+
+  <body>
+    <nav>
+      <a class="" href="/">Home</a>
+      <a href="https://github.com/toxeus" target="_blank">GitHub</a>
+      
+      <a class="" href="/about/">About</a>
+      <a href="https://f.gospodinov.ch/posts/index.xml" id="rss"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"></path><path d="M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1"></circle></svg></a>
+    </nav>
+
+    <section id="page-title">
+      <h1><a href="/">blog</a></h1>
+      <span id="author-name">
+        <h6><a href="/about/">Filip Gospodinov</a></h6>
+      </span>
+    </section>
+      
+
+<div class="content-border">
+  <div class="content">
+    <h1>/dev/random vs /dev/urandom</h1>
+    <aside></aside>
+    <p><p>Historically, there has been a lot of confusion about these
+two sources for random numbers and maybe there still is.
+<code>/dev/random</code> will block if there&rsquo;s &ldquo;not enough entropy&rdquo; in
+the system while <code>/dev/urandom</code> will never block. Therefore,
+<code>/dev/random</code> has the reputation of being more secure. Truth
+is, more often than not <code>/dev/random</code> causes the system to
+hang for no good reason. Let&rsquo;s see why.</p>
+<h2 id="tldr">TL;DR</h2>
+<p>Most programming languages already provide native APIs that do
+the right thing. Use them!</p>
+<table>
+<thead>
+<tr>
+<th>lang</th>
+<th>func</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>C</td>
+<td><a href="http://man7.org/linux/man-pages/man2/getrandom.2.html">getrandom()</a></td>
+</tr>
+<tr>
+<td>C++</td>
+<td><a href="http://man7.org/linux/man-pages/man2/getrandom.2.html">getrandom()</a></td>
+</tr>
+<tr>
+<td>Rust</td>
+<td><a href="https://docs.rs/rand/0.7.3/rand/fn.random.html">rand::random()</a></td>
+</tr>
+<tr>
+<td>Go</td>
+<td><a href="https://golang.org/pkg/crypto/rand/#Read">import &ldquo;crypto/rand&rdquo;; rand.Read()</a></td>
+</tr>
+<tr>
+<td>Python</td>
+<td><a href="https://docs.python.org/3/library/secrets.html">import secrets; secrets.choice()</a></td>
+</tr>
+<tr>
+<td>Shell</td>
+<td>dd if=/dev/urandom &hellip;</td>
+</tr>
+<tr>
+<td>Javascript</td>
+<td><a href="https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues">crypto.getRandomValues()</a>, <a href="https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/generateKey">crypto.subtle.generateKey()</a></td>
+</tr>
+</tbody>
+</table>
+<p>If you cross-compile C/C++ to Windows/macOS/BSD then use a crypto library with
+a proper abstraction, maybe BoringSSL.</p>
+<h2 id="mental-model">Mental model</h2>
+<p>A good way of thinking about a CSPRNG is to think of it as a stream cipher.
+Once it&rsquo;s seeded properly it will output an infinite pseudorandom bit sequence.
+The weak spot of a CSPRNG is therefore the early stage after boot when there&rsquo;s
+not enough entropy collected to properly seed the CSPRNG. Hence, <code>/dev/random</code>
+is only the right source of randomness during early boot (often it&rsquo;s IOT
+devices that are initializing key material on fist boot). In all other cases,
+the non-blocking <code>/dev/urandom</code> should be used.</p>
+<h2 id="the-solution">The solution</h2>
+<p>Use the &ldquo;new&rdquo; <code>getrandom()</code> syscall. It will always do the correct thing
+unless the <code>GRND_RANDOM</code> flag is set.</p>
+<h2 id="the-manpage-knows">The manpage knows</h2>
+<p>Everything is properly explained in <code>man 7 random</code>.</p>
+<blockquote>
+<p>Unless you are doing long-term key generation (and most likely not even then), you probably shouldn&rsquo;t be reading from  the
+/dev/random  device or employing getrandom(2) with the GRND_RANDOM flag. Instead, either read from the /dev/urandom device
+or employ getrandom(2) without the GRND_RANDOM flag. The cryptographic algorithms used for the urandomsource are quite
+conservative, and so should be sufficient for all purposes.</p>
+</blockquote>
+<p>Also, the manpage maintains a table about blocking behavior of the API.</p>
+<table>
+<thead>
+<tr>
+<th>Interface</th>
+<th>Pool</th>
+<th>Blocking behavior</th>
+<th>Behavior when pool is not yet ready</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>/dev/random</td>
+<td>Blocking pool</td>
+<td>If entropy too low, blocks until there is enough entropy again</td>
+<td>Blocks until enough entropy gathered</td>
+</tr>
+<tr>
+<td>/dev/urandom</td>
+<td>CSPRNG output</td>
+<td>Never blocks</td>
+<td>Returns output from uninitialized CSPRNG (may be low entropy and unsuitable for cryptography)</td>
+</tr>
+<tr>
+<td>getrandom()</td>
+<td>Same as /dev/urandom</td>
+<td>Does not block once is pool ready</td>
+<td>Blocks until pool ready</td>
+</tr>
+<tr>
+<td>getrandom()<!-- raw HTML omitted --> GRND_RANDOM</td>
+<td>Same as /dev/random</td>
+<td>If entropy too low, blocks until there is enough entropy again</td>
+<td>Blocks until pool ready</td>
+</tr>
+<tr>
+<td>getrandom()<!-- raw HTML omitted --> GRND_NONBLOCK</td>
+<td>Same as /dev/urandom</td>
+<td>Does not block once is pool ready</td>
+<td>EAGAIN</td>
+</tr>
+<tr>
+<td>getrandom()<!-- raw HTML omitted --> GRND_RANDOM +<!-- raw HTML omitted --> GRND_NONBLOCK</td>
+<td>Same as /dev/random</td>
+<td>EAGAIN if not enough entropy available</td>
+<td>EAGAIN</td>
+</tr>
+</tbody>
+</table>
+<h2 id="but-i-need-entropy">But I need entropy</h2>
+<p>No, you don&rsquo;t. Once the CSPRNG is seeded properly you can rely on its output.
+If you don&rsquo;t trust this causality then you also must distrust the integrity of
+stream ciphers. The CSPRNG is even superior because it&rsquo;s constantly <em>mixing in</em>
+more entropy.</p>
+<h2 id="so-many-traps">So many traps!</h2>
+<p>Despite all the effort to refute the myths around Linux random number sources they
+keep on persisting. There&rsquo;s an effort to make <a href="https://lwn.net/Articles/808575/"><code>/dev/random/</code> behave like
+<code>/dev/urandom</code></a>.</p>
+<h2 id="further-resources">Further Resources</h2>
+<ol>
+<li><a href="https://www.2uo.de/myths-about-urandom/">https://www.2uo.de/myths-about-urandom/</a></li>
+<li><a href="https://media.ccc.de/v/32c3-7441-the_plain_simple_reality_of_entropy">https://media.ccc.de/v/32c3-7441-the_plain_simple_reality_of_entropy</a></li>
+</ol>
+</p>
+  </div>
+
+  
+    <p>Written on Apr 13, 2020.</p>
+  
+</div>
+
+
+    <footer>
+      <hr>
+      <small>
+        &copy; 2020 Filip Gospodinov.
+      </small>
+    </footer>
+  </body>
+</html>

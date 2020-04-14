@@ -1,0 +1,155 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Posts on blog</title>
+    <link>https://f.gospodinov.ch/posts/</link>
+    <description>Recent content in Posts on blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en-us</language>
+    <lastBuildDate>Mon, 13 Apr 2020 21:51:08 +0200</lastBuildDate>
+    
+        <atom:link href="https://f.gospodinov.ch/posts/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>/dev/random vs /dev/urandom</title>
+      <link>https://f.gospodinov.ch/posts/random-vs-urandom/</link>
+      <pubDate>Mon, 13 Apr 2020 21:51:08 +0200</pubDate>
+      
+      <guid>https://f.gospodinov.ch/posts/random-vs-urandom/</guid>
+      <description>&lt;p&gt;Historically, there has been a lot of confusion about these
+two sources for random numbers and maybe there still is.
+&lt;code&gt;/dev/random&lt;/code&gt; will block if there&amp;rsquo;s &amp;ldquo;not enough entropy&amp;rdquo; in
+the system while &lt;code&gt;/dev/urandom&lt;/code&gt; will never block. Therefore,
+&lt;code&gt;/dev/random&lt;/code&gt; has the reputation of being more secure. Truth
+is, more often than not &lt;code&gt;/dev/random&lt;/code&gt; causes the system to
+hang for no good reason. Let&amp;rsquo;s see why.&lt;/p&gt;
+&lt;h2 id=&#34;tldr&#34;&gt;TL;DR&lt;/h2&gt;
+&lt;p&gt;Most programming languages already provide native APIs that do
+the right thing. Use them!&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;lang&lt;/th&gt;
+&lt;th&gt;func&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;C&lt;/td&gt;
+&lt;td&gt;&lt;a href=&#34;http://man7.org/linux/man-pages/man2/getrandom.2.html&#34;&gt;getrandom()&lt;/a&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;C++&lt;/td&gt;
+&lt;td&gt;&lt;a href=&#34;http://man7.org/linux/man-pages/man2/getrandom.2.html&#34;&gt;getrandom()&lt;/a&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Rust&lt;/td&gt;
+&lt;td&gt;&lt;a href=&#34;https://docs.rs/rand/0.7.3/rand/fn.random.html&#34;&gt;rand::random()&lt;/a&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Go&lt;/td&gt;
+&lt;td&gt;&lt;a href=&#34;https://golang.org/pkg/crypto/rand/#Read&#34;&gt;import &amp;ldquo;crypto/rand&amp;rdquo;; rand.Read()&lt;/a&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Python&lt;/td&gt;
+&lt;td&gt;&lt;a href=&#34;https://docs.python.org/3/library/secrets.html&#34;&gt;import secrets; secrets.choice()&lt;/a&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Shell&lt;/td&gt;
+&lt;td&gt;dd if=/dev/urandom &amp;hellip;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Javascript&lt;/td&gt;
+&lt;td&gt;&lt;a href=&#34;https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues&#34;&gt;crypto.getRandomValues()&lt;/a&gt;, &lt;a href=&#34;https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/generateKey&#34;&gt;crypto.subtle.generateKey()&lt;/a&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;If you cross-compile C/C++ to Windows/macOS/BSD then use a crypto library with
+a proper abstraction, maybe BoringSSL.&lt;/p&gt;
+&lt;h2 id=&#34;mental-model&#34;&gt;Mental model&lt;/h2&gt;
+&lt;p&gt;A good way of thinking about a CSPRNG is to think of it as a stream cipher.
+Once it&amp;rsquo;s seeded properly it will output an infinite pseudorandom bit sequence.
+The weak spot of a CSPRNG is therefore the early stage after boot when there&amp;rsquo;s
+not enough entropy collected to properly seed the CSPRNG. Hence, &lt;code&gt;/dev/random&lt;/code&gt;
+is only the right source of randomness during early boot (often it&amp;rsquo;s IOT
+devices that are initializing key material on fist boot). In all other cases,
+the non-blocking &lt;code&gt;/dev/urandom&lt;/code&gt; should be used.&lt;/p&gt;
+&lt;h2 id=&#34;the-solution&#34;&gt;The solution&lt;/h2&gt;
+&lt;p&gt;Use the &amp;ldquo;new&amp;rdquo; &lt;code&gt;getrandom()&lt;/code&gt; syscall. It will always do the correct thing
+unless the &lt;code&gt;GRND_RANDOM&lt;/code&gt; flag is set.&lt;/p&gt;
+&lt;h2 id=&#34;the-manpage-knows&#34;&gt;The manpage knows&lt;/h2&gt;
+&lt;p&gt;Everything is properly explained in &lt;code&gt;man 7 random&lt;/code&gt;.&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;Unless you are doing long-term key generation (and most likely not even then), you probably shouldn&amp;rsquo;t be reading from  the
+/dev/random  device or employing getrandom(2) with the GRND_RANDOM flag. Instead, either read from the /dev/urandom device
+or employ getrandom(2) without the GRND_RANDOM flag. The cryptographic algorithms used for the urandomsource are quite
+conservative, and so should be sufficient for all purposes.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;Also, the manpage maintains a table about blocking behavior of the API.&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Interface&lt;/th&gt;
+&lt;th&gt;Pool&lt;/th&gt;
+&lt;th&gt;Blocking behavior&lt;/th&gt;
+&lt;th&gt;Behavior when pool is not yet ready&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;/dev/random&lt;/td&gt;
+&lt;td&gt;Blocking pool&lt;/td&gt;
+&lt;td&gt;If entropy too low, blocks until there is enough entropy again&lt;/td&gt;
+&lt;td&gt;Blocks until enough entropy gathered&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;/dev/urandom&lt;/td&gt;
+&lt;td&gt;CSPRNG output&lt;/td&gt;
+&lt;td&gt;Never blocks&lt;/td&gt;
+&lt;td&gt;Returns output from uninitialized CSPRNG (may be low entropy and unsuitable for cryptography)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;getrandom()&lt;/td&gt;
+&lt;td&gt;Same as /dev/urandom&lt;/td&gt;
+&lt;td&gt;Does not block once is pool ready&lt;/td&gt;
+&lt;td&gt;Blocks until pool ready&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;getrandom()&lt;!-- raw HTML omitted --&gt; GRND_RANDOM&lt;/td&gt;
+&lt;td&gt;Same as /dev/random&lt;/td&gt;
+&lt;td&gt;If entropy too low, blocks until there is enough entropy again&lt;/td&gt;
+&lt;td&gt;Blocks until pool ready&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;getrandom()&lt;!-- raw HTML omitted --&gt; GRND_NONBLOCK&lt;/td&gt;
+&lt;td&gt;Same as /dev/urandom&lt;/td&gt;
+&lt;td&gt;Does not block once is pool ready&lt;/td&gt;
+&lt;td&gt;EAGAIN&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;getrandom()&lt;!-- raw HTML omitted --&gt; GRND_RANDOM +&lt;!-- raw HTML omitted --&gt; GRND_NONBLOCK&lt;/td&gt;
+&lt;td&gt;Same as /dev/random&lt;/td&gt;
+&lt;td&gt;EAGAIN if not enough entropy available&lt;/td&gt;
+&lt;td&gt;EAGAIN&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;but-i-need-entropy&#34;&gt;But I need entropy&lt;/h2&gt;
+&lt;p&gt;No, you don&amp;rsquo;t. Once the CSPRNG is seeded properly you can rely on its output.
+If you don&amp;rsquo;t trust this causality then you also must distrust the integrity of
+stream ciphers. The CSPRNG is even superior because it&amp;rsquo;s constantly &lt;em&gt;mixing in&lt;/em&gt;
+more entropy.&lt;/p&gt;
+&lt;h2 id=&#34;so-many-traps&#34;&gt;So many traps!&lt;/h2&gt;
+&lt;p&gt;Despite all the effort to refute the myths around Linux random number sources they
+keep on persisting. There&amp;rsquo;s an effort to make &lt;a href=&#34;https://lwn.net/Articles/808575/&#34;&gt;&lt;code&gt;/dev/random/&lt;/code&gt; behave like
+&lt;code&gt;/dev/urandom&lt;/code&gt;&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;further-resources&#34;&gt;Further Resources&lt;/h2&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.2uo.de/myths-about-urandom/&#34;&gt;https://www.2uo.de/myths-about-urandom/&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://media.ccc.de/v/32c3-7441-the_plain_simple_reality_of_entropy&#34;&gt;https://media.ccc.de/v/32c3-7441-the_plain_simple_reality_of_entropy&lt;/a&gt;&lt;/li&gt;
+&lt;/ol&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>
