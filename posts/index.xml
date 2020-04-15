@@ -72,7 +72,7 @@ Once it&amp;rsquo;s seeded properly it will output an infinite pseudorandom bit 
 The weak spot of a CSPRNG is therefore the early stage after boot when there&amp;rsquo;s
 not enough entropy collected to properly seed the CSPRNG. Hence, &lt;code&gt;/dev/random&lt;/code&gt;
 is only the right source of randomness during early boot (often it&amp;rsquo;s IOT
-devices that are initializing key material on fist boot). In all other cases,
+devices that are initializing key material on first boot). In all other cases,
 the non-blocking &lt;code&gt;/dev/urandom&lt;/code&gt; should be used.&lt;/p&gt;
 &lt;h2 id=&#34;the-solution&#34;&gt;The solution&lt;/h2&gt;
 &lt;p&gt;Use the &amp;ldquo;new&amp;rdquo; &lt;code&gt;getrandom()&lt;/code&gt; syscall. It will always do the correct thing
