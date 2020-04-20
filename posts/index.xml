@@ -5,10 +5,118 @@
     <description>Recent content in Posts on blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Mon, 13 Apr 2020 21:51:08 +0200</lastBuildDate>
+    <lastBuildDate>Sat, 18 Apr 2020 11:54:12 +0200</lastBuildDate>
     
         <atom:link href="https://f.gospodinov.ch/posts/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>A case against TLS</title>
+      <link>https://f.gospodinov.ch/posts/case-against-tls/</link>
+      <pubDate>Sat, 18 Apr 2020 11:54:12 +0200</pubDate>
+      
+      <guid>https://f.gospodinov.ch/posts/case-against-tls/</guid>
+      <description>&lt;h2 id=&#34;introduction&#34;&gt;Introduction&lt;/h2&gt;
+&lt;p&gt;Should we MAC-then-encrypt or encrypt-then-MAC? This one and dozens of other
+pitfalls in designing a cryptographic protocol has lead to the general consensus
+that cryptographic protocols shouldn&amp;rsquo;t be developed ad hoc but cryptographic
+libraries that have been carefully reviewed and scrutinized should be used.
+Such a library transparently takes care of the pitfall above. It would implement
+the cryptographic handshake and key exchange, know how to talk to an older
+protocol version, make sure a nonce is used only once, handle reply attacks,
+implement perfect forward secrecy, etc.&lt;/p&gt;
+&lt;p&gt;The standard choice is a TLS library, most often OpenSSL. TLS is wide-spread and
+&amp;ldquo;well understood&amp;rdquo;. But I want to argue that if you&amp;rsquo;re &lt;em&gt;not&lt;/em&gt; talking to a browser
+then you should really consider using something else than TLS.&lt;/p&gt;
+&lt;h2 id=&#34;complex-certificate-handling&#34;&gt;Complex certificate handling&lt;/h2&gt;
+&lt;p&gt;It doesn&amp;rsquo;t matter which TLS implementation you choose you will likely
+end up using the &lt;code&gt;openssl&lt;/code&gt; tool to create your certificates. The tool&amp;rsquo;s user
+experience isn&amp;rsquo;t intuitive and it&amp;rsquo;s hard to memorize the
+&lt;a href=&#34;https://github.com/openssl/openssl/blob/e0331eb8b818ed0daac45e0786571958f744d398/demos/certs/mkcerts.sh&#34;&gt;relevant commands&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Moreover, you will deal with &lt;code&gt;*.csr, *.pem, *.key, *.pkcs12, *.pfx, *.p12, *.der, *.cert, *.cer, *.crt, *.p7b, *.keystore, *.crl,&lt;/code&gt; files.
+I think the amount of different files (or extension aliases) is a very good
+proxy for the underlying complexity which impacts security and the deployment
+process.&lt;/p&gt;
+&lt;h2 id=&#34;obscure-apis&#34;&gt;Obscure APIs&lt;/h2&gt;
+&lt;p&gt;The most popular TLS implementation is OpenSSL. OpenSSL is known to have
+&lt;a href=&#34;https://github.com/openssl/openssl/blob/be9d82bb35812ac65cd92316d1ae7c7c75efe9cf/include/openssl/bio.h&#34;&gt;APIs&lt;/a&gt;
+that are hard to use correctly. So even if OpenSSL has no implementation errors
+the software using it can potentially degrade security by incorrect use of
+those APIs. BoringSSL and LibreSSL being OpenSSL forks will have a similar issues.
+Other TLS implementations won&amp;rsquo;t reduce the complexity of their APIs much because
+there&amp;rsquo;s also complexity that&amp;rsquo;s inherent to TLS. Go&amp;rsquo;s &lt;a href=&#34;https://golang.org/pkg/crypto/tls/&#34;&gt;TLS package&lt;/a&gt;
+has the cleanest API I have seen out there. I don&amp;rsquo;t expect any more room for
+complexity reduction.&lt;/p&gt;
+&lt;p&gt;As long as crypto APIs are obscure they will be used incorrectly. Dan Bernstein
+is the most prominent advocate for crypto APIs that are easy to use correctly.
+NaCl&amp;rsquo;s API for example only returns the message after its signature has been
+successfully verified. This eliminates the possibility to forget - or
+accidentally remove - a signature check.&lt;/p&gt;
+&lt;p&gt;Google&amp;rsquo;s &lt;a href=&#34;https://landing.google.com/sre/resources/foundationsandprinciples/srs-book/&#34;&gt;Building Secure and Reliable Systems&lt;/a&gt;
+has an entire section called &amp;ldquo;Simplicity Leads to Secure and Reliable Code&amp;rdquo;.
+I couldn&amp;rsquo;t agree more and that is why the point I&amp;rsquo;ve raised in this section
+is the most critical one.&lt;/p&gt;
+&lt;h2 id=&#34;tls-is-for-browsers&#34;&gt;TLS is for browsers&lt;/h2&gt;
+&lt;p&gt;TLS - formerly SSL - was designed for browsers by Taher Elgamal while working at
+Netscape. The goal was to introduce secure channels for confidential data on the
+internet such as credit card data. That facilitated &amp;ldquo;e-commerce&amp;rdquo; as it used to be
+called during those days.&lt;/p&gt;
+&lt;p&gt;Consequently, TLS implements a lot of features that are useful to browsers but not
+so much in situations when services are talking to each other.&lt;/p&gt;
+&lt;h3 id=&#34;backwards-compatibility&#34;&gt;Backwards compatibility&lt;/h3&gt;
+&lt;p&gt;TLS can always talk to older TLS protocol versions because not all browsers are
+being kept up to date - be it in corporate environments or on unmaintained home
+PCs.&lt;/p&gt;
+&lt;p&gt;This backwards compatibility is not useful if both communication endpoints are
+controlled by you. On the contrary, TLS has a history of doing it wrong and
+was subjected to downgrade attacks. Supposedly, TLS 1.3 has finally fixed it.&lt;/p&gt;
+&lt;h3 id=&#34;authentication-through-certification-authorities&#34;&gt;Authentication through certification authorities&lt;/h3&gt;
+&lt;p&gt;It&amp;rsquo;s impossible to predict what websites a user will visit with his browser.
+Therefore, websites need to be authenticated on demand. The solution in the TLS
+world is to use certification authorities for that.&lt;/p&gt;
+&lt;p&gt;But you will know upfront which services your service will communicate with.
+You will configure their hostname/IP address and you can also configure their
+certificates/public keys at the same time.&lt;/p&gt;
+&lt;p&gt;Certification authorities have a reputation of not doing their job diligent
+enough. There&amp;rsquo;s a long list of incidents where browser and OS vendors have had
+to distrust certificates or even a certificate authority&amp;rsquo;s root certificate.&lt;/p&gt;
+&lt;h2 id=&#34;attack-surface-reduction&#34;&gt;Attack surface reduction&lt;/h2&gt;
+&lt;p&gt;Even if you settle for TLS 1.3 (you really should) the TLS library will still
+implement previous TLS versions for other use cases. This unnecessarily widens the
+attack surface. It is common that software is attacked through &lt;a href=&#34;https://www.infoq.com/presentations/security-attack-surface/&#34;&gt;unused
+features&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;history-of-vulnerabilities&#34;&gt;History of vulnerabilities&lt;/h2&gt;
+&lt;p&gt;OpenSSL, the most popular implementation, is infamous for its &lt;a href=&#34;https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=openssl&#34;&gt;long and ongoing
+history of vulnerabilities&lt;/a&gt;.
+Mozilla&amp;rsquo;s NSS accounts for &lt;a href=&#34;https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=nss&#34;&gt;mutliple vulnerabilities&lt;/a&gt;
+every year; same for &lt;a href=&#34;https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=wolfssl&#34;&gt;wolfSSL&lt;/a&gt;,
+&lt;a href=&#34;https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=gnutls&#34;&gt;GnuTLS&lt;/a&gt;,
+&lt;a href=&#34;https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=jsse&#34;&gt;JSSE&lt;/a&gt;, etc.&lt;/p&gt;
+&lt;h2 id=&#34;but-tls-13-is-great&#34;&gt;But TLS 1.3 is great!&lt;/h2&gt;
+&lt;p&gt;TLS 1.3 is a &lt;em&gt;huge&lt;/em&gt; step forward. It retired an array of legacy cryptographic
+primitives, fixed the downgrade attack issues and optimized the handshake.
+Still, I think that the points raised here remain valid.&lt;/p&gt;
+&lt;h2 id=&#34;but-are-there-alternatives&#34;&gt;But are there alternatives?&lt;/h2&gt;
+&lt;p&gt;Yes, there are! From top of my head I can name the following:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Dan Bernstein&amp;rsquo;s &lt;a href=&#34;https://nacl.cr.yp.to/&#34;&gt;NaCl&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Google&amp;rsquo;s &lt;a href=&#34;https://github.com/google/tink&#34;&gt;tink&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://noiseprotocol.org/&#34;&gt;Noise Protocol Framework&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;SSH&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;ssh-seriously&#34;&gt;SSH, seriously?&lt;/h2&gt;
+&lt;p&gt;Kind of! I&amp;rsquo;ve chosen it just to prove my point. Almost every developer out there
+has already configured a CI/CD service to access other services such as a Git
+repository. You probably too. How did you like the experience of &amp;ldquo;creating the
+SSH certificate&amp;rdquo; (a.k.a. key generation) and deploying it on the CI/CD service?
+Is it preferable to the experience you have had with TLS certificates? How
+confident do you feel when dealing with SSH compared to TLS?&lt;/p&gt;
+&lt;p&gt;With that said, SSH is also no silver bullet. Its process of obsoleting dated
+cryptographic primitives is conservative. There are article&amp;rsquo;s on the internet with
+instructions on how to configure OpenSSH to only use strong and modern cryptographic
+primitives. But I guess this is a topic for another blog post.&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>/dev/random vs /dev/urandom</title>
